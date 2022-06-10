@@ -19,21 +19,24 @@ impl Counter {
     }
 
     /// Public method: Increment the counter.
-    pub fn increment(&mut self) {
+    pub fn increment(&mut self) -> i8 {
         self.val += 1;
         log!("Increased number to {}", self.val);
+        self.val
     }
 
     /// Public method: Decrement the counter.
-    pub fn decrement(&mut self) {
+    pub fn decrement(&mut self) -> i8 {
         self.val -= 1;
         log!("Decreased number to {}", self.val);
+        self.val
     }
 
     /// Public method - Reset to zero.
-    pub fn reset(&mut self) {
+    pub fn reset(&mut self) -> i8 {
         self.val = 0;
         log!("Reset counter to zero");
+        self.val
     }
 }
 
