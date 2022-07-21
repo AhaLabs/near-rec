@@ -3,88 +3,74 @@
 //! The contract provides methods to [increment] / [decrement] counter and
 //! get it's current value [get_num] or [reset].
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::{log, near_bindgen};
+use near_sdk::{
+    collections::{UnorderedMap, Vector},
+    env,
+    json_types::U128,
+    near_bindgen, require, AccountId,
+};
+use std::collections::HashMap;
 
 #[near_bindgen]
-#[derive(Default, BorshDeserialize, BorshSerialize)]
-pub struct Counter {
-    val: i8,
+#[derive(BorshDeserialize, BorshSerialize)]
+pub struct Contract {
+    map: UnorderedMap<AccountId, Option<String>>,
+    keys: Vector<AccountId>,
 }
 
-#[near_bindgen]
-impl Counter {
-    /// Public method: Returns the counter value.
-    pub fn get_num(&self) -> i8 {
-        self.val
-    }
-
-    /// Public method: Increment the counter.
-    pub fn increment(&mut self) -> i8 {
-        self.val += 1;
-        log!("Increased number to {}", self.val);
-        self.val
-    }
-
-    /// Public method: Decrement the counter.
-    pub fn decrement(&mut self) -> i8 {
-        self.val -= 1;
-        log!("Decreased number to {}", self.val);
-        self.val
-    }
-
-    /// Public method - Reset to zero.
-    pub fn reset(&mut self) -> i8 {
-        self.val = 0;
-        log!("Reset counter to zero");
-        self.val
+impl Default for Contract {
+    fn default() -> Self {
+        Self {
+            map: UnorderedMap::new(b"m"),
+            keys: Vector::new(b"v"),
+        }
     }
 }
 
-/*
- * the rest of this file sets up unit tests
- * to run these, the command will be: `cargo test`
- * Note: 'rust-counter-tutorial' comes from cargo.toml's 'name' key
- */
+#[witgen::witgen]
+pub type Start = Option<U128>;
 
-// use the attribute below for unit tests
-#[cfg(test)]
-mod tests {
-    use super::*;
+#[witgen::witgen]
+pub type Limit = Option<u64>;
 
-    #[test]
-    fn increment() {
-        // instantiate a contract variable with the counter at zero
-        let mut contract = Counter { val: 0 };
-        contract.increment();
-        assert_eq!(1, contract.get_num());
+#[near_bindgen]
+impl Contract {
+    /// Do you recommend that the NEAR foundation should fund work on RAEN?
+    /// If you do, please sign here and leave a message!
+    pub fn recommend(&mut self, message: Option<String>) {
+        let signer = env::signer_account_id();
+        if self.map.insert(&signer, &message).is_none() {
+            self.keys.push(&signer);
+            env::log_str(&format!("Thank you, {signer}!"));
+        }
     }
 
-    #[test]
-    fn decrement() {
-        let mut contract = Counter { val: 0 };
-        contract.decrement();
-        assert_eq!(-1, contract.get_num());
+    /// Get a range of recommendations
+    /// Starting index, must be smaller than total number of entries.
+    /// If not filled in, defaults to 0
+    /// limit is the number of elements after `start`, default is len - start, which is also maximimum.
+    pub fn get_recommendations(
+        &self,
+        start: Start,
+        limit: Limit,
+    ) -> HashMap<AccountId, Option<String>> {
+        let len = self.keys.len();
+        let start = start.map(|start| start.0 as u64).unwrap_or_default();
+        require!(start < len, "start must be less than len");
+        let end = u64::min(start + (limit.unwrap_or(len - start)), len);
+        (start..end)
+            .map(|i| self.keys.get(i).unwrap())
+            .map(|key| (key.clone(), self.map.get(&key).unwrap()))
+            .collect()
     }
 
-    #[test]
-    fn increment_and_reset() {
-        let mut contract = Counter { val: 0 };
-        contract.increment();
-        contract.reset();
-        assert_eq!(0, contract.get_num());
+    /// Total number of recommendations received
+    pub fn total_recommendations(&self) -> u64 {
+        self.keys.len()
     }
 
-    #[test]
-    #[should_panic]
-    fn panics_on_overflow() {
-        let mut contract = Counter { val: 127 };
-        contract.increment();
-    }
-
-    #[test]
-    #[should_panic]
-    fn panics_on_underflow() {
-        let mut contract = Counter { val: -128 };
-        contract.decrement();
+    /// Get the recommendation from a specific account
+    pub fn get_recommendation(&self, account_id: AccountId) -> Option<Option<String>> {
+        self.map.get(&account_id)
     }
 }
