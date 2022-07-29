@@ -1,61 +1,82 @@
-//! This contract implements simple counter backed by storage on blockchain.
-//!
-//! The contract provides methods to [increment] / [decrement] counter and
-//! get it's current value [get_num] or [reset].
+use std::collections::HashMap;
+
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::{
-    collections::{UnorderedMap, Vector},
+    collections::{LookupMap, Vector},
     env,
     json_types::U128,
     near_bindgen, require, AccountId,
 };
-use std::collections::HashMap;
 
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Contract {
-    map: UnorderedMap<AccountId, Option<String>>,
+    map: LookupMap<AccountId, Option<String>>,
     keys: Vector<AccountId>,
 }
 
 impl Default for Contract {
     fn default() -> Self {
         Self {
-            map: UnorderedMap::new(b"m"),
+            map: LookupMap::new(b"m"),
             keys: Vector::new(b"v"),
         }
     }
 }
 
+/// Starting index, must be smaller than total number of entries.
+/// If not filled in, defaults to 0
+/// @pattern ^[0-9]+$
 #[witgen::witgen]
-pub type Start = Option<U128>;
+pub type Start = String;
 
 #[witgen::witgen]
-pub type Limit = Option<u64>;
+/// Limit how many recommendations to get after start
+pub type Limit = u64;
 
 #[near_bindgen]
 impl Contract {
-    /// Do you recommend that the NEAR foundation should fund work on RAEN?
-    /// If you do, please sign here and leave a message!
+    /// ㅤ                                                                                    .
+    /// This Contract was built with raen. Each item on the left is a contract method you can call.
+    /// To learn more checkout the guide: https://raen.dev/guide
+    /// ㅤ                                                                                    .
+    /// Do you support the NEAR foundation funding continued work on RAEN?
+    /// ㅤ                                                                                    .
+    /// If you do, please sign here and if you want leave a message!
+    /// ㅤ                                                                                    .
+    /// Signing and leaving a message has a storage cost, you will be refunded what isn't required.
+    /// Suggestion for attached deposit 100000000000000000000000 yn = 0.1 N. Likely this is filled in already.
+    /// ㅤ                                                                                    .
+    /// 
+    #[payable]
     pub fn recommend(&mut self, message: Option<String>) {
         let signer = env::signer_account_id();
+        let before = env::storage_usage();
         if self.map.insert(&signer, &message).is_none() {
             self.keys.push(&signer);
-            env::log_str(&format!("Thank you, {signer}!"));
         }
+        let after = env::storage_usage() - before;
+        let cost = after as u128 * env::STORAGE_PRICE_PER_BYTE;
+        let attached_deposit = env::attached_deposit();
+        require!(cost <= attached_deposit, &format!("Required {cost} yN"));
+        let left_over_funds = attached_deposit - cost;
+        if left_over_funds > 0 {
+            env::promise_batch_action_transfer(
+                env::promise_batch_create(&env::predecessor_account_id()),
+                left_over_funds,
+            );
+        }
+        env::log_str(&format!("Thank you, {signer}!"));
     }
 
     /// Get a range of recommendations
-    /// Starting index, must be smaller than total number of entries.
-    /// If not filled in, defaults to 0
-    /// limit is the number of elements after `start`, default is len - start, which is also maximimum.
     pub fn get_recommendations(
         &self,
-        start: Start,
-        limit: Limit,
+        start: Option<Start>,
+        limit: Option<Limit>,
     ) -> HashMap<AccountId, Option<String>> {
         let len = self.keys.len();
-        let start = start.map(|start| start.0 as u64).unwrap_or_default();
+        let start = start.map(|start| u128::from_str_radix(&start, 10).expect("opps bad u128") as u64).unwrap_or_default();
         require!(start < len, "start must be less than len");
         let end = u64::min(start + (limit.unwrap_or(len - start)), len);
         (start..end)

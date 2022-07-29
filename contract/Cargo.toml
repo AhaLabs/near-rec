@@ -9,6 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 near-sdk = "4.0.0"
+ufmt = "0.1.0"
 witgen = "0.14.0"
 
 [dev-dependencies]
