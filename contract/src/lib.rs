@@ -3,15 +3,31 @@ use std::collections::HashMap;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::{
     collections::{LookupMap, Vector},
-    env,
-    json_types::U128,
-    near_bindgen, require, AccountId,
+    env, near_bindgen, require,
+    serde::{Deserialize, Serialize},
+    AccountId,
 };
+
+/// Optional fields to provide more info
+#[witgen::witgen]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct UserInfo {
+    /// Name you go by:
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+    /// Which company or project are you affliated with:
+    #[serde(skip_serializing_if = "Option::is_none")]
+    affiliation: Option<String>,
+    /// Message of support
+    #[serde(skip_serializing_if = "Option::is_none")]
+    message: Option<String>,
+}
 
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Contract {
-    map: LookupMap<AccountId, Option<String>>,
+    map: LookupMap<AccountId, UserInfo>,
     keys: Vector<AccountId>,
 }
 
@@ -24,7 +40,7 @@ impl Default for Contract {
     }
 }
 
-/// Starting index, must be smaller than total number of entries.
+/// Starting index, must be smaller than total number of entries.ㅤ                                                                                    .
 /// If not filled in, defaults to 0
 /// @pattern ^[0-9]+$
 #[witgen::witgen]
@@ -36,9 +52,7 @@ pub type Limit = u64;
 
 #[near_bindgen]
 impl Contract {
-    /// ㅤ                                                                                    .
-    /// This Contract was built with raen. Each item on the left is a contract method you can call.
-    /// To learn more checkout the guide: https://raen.dev/guide
+    /// ㅤ                                                                                    
     /// ㅤ                                                                                    .
     /// Do you support the NEAR foundation funding continued work on RAEN?
     /// ㅤ                                                                                    .
@@ -47,16 +61,16 @@ impl Contract {
     /// Signing and leaving a message has a storage cost, you will be refunded what isn't required.
     /// Suggestion for attached deposit 100000000000000000000000 yn = 0.1 N. Likely this is filled in already.
     /// ㅤ                                                                                    .
-    /// 
+    ///
     #[payable]
-    pub fn recommend(&mut self, message: Option<String>) {
+    pub fn recommend(&mut self, user_info: &UserInfo) {
         let signer = env::signer_account_id();
         let before = env::storage_usage();
-        if self.map.insert(&signer, &message).is_none() {
+        if self.map.insert(&signer, user_info).is_none() {
             self.keys.push(&signer);
         }
         let after = env::storage_usage() - before;
-        let cost = after as u128 * env::STORAGE_PRICE_PER_BYTE;
+        let cost = u128::from(after) * env::STORAGE_PRICE_PER_BYTE;
         let attached_deposit = env::attached_deposit();
         require!(cost <= attached_deposit, &format!("Required {cost} yN"));
         let left_over_funds = attached_deposit - cost;
@@ -69,14 +83,24 @@ impl Contract {
         env::log_str(&format!("Thank you, {signer}!"));
     }
 
-    /// Get a range of recommendations
+    /// ㅤ                                                                                    .
+    /// This Contract was built with RAEN. Each item on the left is a contract method you can call.
+    /// To learn more check out the guide: https://raen.dev
+    /// ㅤ                                                                                    .
+    /// This method gets a range of recommendations.
+    /// 
+    /// ㅤ                                                                                    .
+    /// How many recommendations to return.ㅤ                                          .
+    /// Default if not filled in is all after start.
     pub fn get_recommendations(
         &self,
         start: Option<Start>,
         limit: Option<Limit>,
-    ) -> HashMap<AccountId, Option<String>> {
+    ) -> HashMap<AccountId, UserInfo> {
         let len = self.keys.len();
-        let start = start.map(|start| u128::from_str_radix(&start, 10).expect("opps bad u128") as u64).unwrap_or_default();
+        let start = start
+            .map(|start| start.parse::<u128>().expect("opps bad u128") as u64)
+            .unwrap_or_default();
         require!(start < len, "start must be less than len");
         let end = u64::min(start + (limit.unwrap_or(len - start)), len);
         (start..end)
@@ -91,7 +115,7 @@ impl Contract {
     }
 
     /// Get the recommendation from a specific account
-    pub fn get_recommendation(&self, account_id: AccountId) -> Option<Option<String>> {
-        self.map.get(&account_id)
+    pub fn get_recommendation(&self, account_id: &AccountId) -> Option<UserInfo> {
+        self.map.get(account_id)
     }
 }
