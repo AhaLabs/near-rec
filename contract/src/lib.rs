@@ -99,8 +99,11 @@ impl Contract {
     ) -> HashMap<AccountId, UserInfo> {
         let len = self.keys.len();
         let start = start
-            .map(|start| start.parse::<u128>().expect("opps bad u128") as u64)
-            .unwrap_or_default();
+        .map(|start| start.parse::<u128>().expect("opps bad u128") as u64)
+        .unwrap_or_default();
+        if len == 0 {
+          return HashMap::default();
+        }
         require!(start < len, "start must be less than len");
         let end = u64::min(start + (limit.unwrap_or(len - start)), len);
         (start..end)
